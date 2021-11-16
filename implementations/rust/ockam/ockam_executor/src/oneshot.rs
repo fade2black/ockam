@@ -12,14 +12,9 @@ use futures::task::AtomicWaker;
 use heapless::mpmc::MpMcQueue;
 
 type QueueN<T, const N: usize> = MpMcQueue<T, N>;
-pub type Queue<T> = QueueN<T, 32>;
+pub type Queue<T> = QueueN<T, 1>;
 
 pub type Sender<T> = SyncSender<T>;
-
-pub fn sync_channel<T>(_size: usize) -> (SyncSender<T>, Receiver<T>) {
-    let queue = Queue::<T>::new();
-    channel_with_queue(queue)
-}
 
 pub fn channel<T>() -> (SyncSender<T>, Receiver<T>) {
     let queue = Queue::<T>::new();
@@ -100,7 +95,7 @@ impl<T> Drop for SyncSender<T> {
 
 impl<T> core::fmt::Debug for SyncSender<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "[SyncSender]")
+        write!(f, "[OneShotSender]")
     }
 }
 
@@ -122,7 +117,7 @@ impl<T> Receiver<T> {
 
 impl<T> core::fmt::Debug for Receiver<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "[Receiver]")
+        write!(f, "[OneShotReceiver]")
     }
 }
 

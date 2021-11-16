@@ -8,20 +8,27 @@ use ockam_core::compat::sync::Arc;
 
 use futures::future::poll_fn;
 use futures::task::AtomicWaker;
+use futures::FutureExt;
 
 use heapless::mpmc::MpMcQueue;
 
-pub type QueueN<T, const N: usize> = MpMcQueue<T, N>;
-pub type Queue<T> = QueueN<T, 32>;
+use crate::error;
 
-pub fn channel<T>(_size: usize) -> (Sender<T>, Receiver<T>) {
+const QUEUE_SIZE: usize = 16;
+
+pub type QueueN<T, const N: usize> = MpMcQueue<T, N>;
+pub type Queue<T> = QueueN<T, QUEUE_SIZE>;
+
+pub fn channel<T>(size: usize) -> (Sender<T>, Receiver<T>) {
     let queue = Queue::new();
-    channel_with_queue(queue)
+    channel_with_queue(size, queue)
 }
 
-fn channel_with_queue<T>(queue: Queue<T>) -> (Sender<T>, Receiver<T>) {
+fn channel_with_queue<T>(size: usize, queue: Queue<T>) -> (Sender<T>, Receiver<T>) {
     let inner = Arc::new(Inner {
-        queue,
+        size: size,
+        queue: queue,
+        item_count: AtomicUsize::new(0),
         wake_sender: AtomicWaker::new(),
         wake_receiver: AtomicWaker::new(),
         sender_count: AtomicUsize::new(1),
@@ -31,7 +38,14 @@ fn channel_with_queue<T>(queue: Queue<T>) -> (Sender<T>, Receiver<T>) {
     (Sender(inner), Receiver(inner_clone))
 }
 
+/// Inner
 struct Inner<T> {
+    /// Logical size of the underlying queue
+    size: usize,
+
+    /// Number of items in queue
+    item_count: AtomicUsize,
+
     /// Shared instance of the underlying queue
     queue: Queue<T>,
 
@@ -50,28 +64,15 @@ struct Inner<T> {
     is_sender_closed: AtomicBool,
 }
 
+/// Sender
 pub struct Sender<T>(Arc<Inner<T>>);
 
 impl<T: core::fmt::Debug> Sender<T> {
     pub async fn send(&self, value: T) -> Result<(), error::SendError<T>> {
-        let mut value = Some(value);
-        poll_fn(|context| {
-            match self.0.queue.enqueue(value.take().unwrap()) {
-                Ok(()) => {
-                    self.0.wake_receiver.wake();
-                    Poll::Ready(Ok(()))
-                }
-                Err(_) => {
-                    // queue is full
-                    {
-                        self.0.is_sender_closed.swap(true, Ordering::AcqRel);
-                        self.0.wake_receiver.wake();
-                    }
-                    self.0.wake_sender.register(context.waker());
-                    Poll::Pending
-                }
-            }
-        })
+        SendFuture {
+            inner: &self.0,
+            value: Some(value),
+        }
         .await
     }
 
@@ -108,26 +109,56 @@ impl<T> core::fmt::Debug for Sender<T> {
     }
 }
 
+pub struct SendFuture<'a, T> {
+    inner: &'a Inner<T>,
+    value: Option<T>,
+}
+
+impl<'a, T> Future for SendFuture<'a, T>
+where
+    T: core::fmt::Debug,
+{
+    type Output = Result<(), error::SendError<T>>;
+
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        let value = self.value.take();
+        match value {
+            Some(value) => {
+                match self.inner.queue.enqueue(value) {
+                    Ok(()) => {
+                        self.inner.item_count.fetch_add(1, Ordering::Relaxed);
+                        self.inner.wake_receiver.wake();
+                        Poll::Ready(Ok(()))
+                    }
+                    Err(_) => {
+                        // queue is full - TODO implement backpressure
+                        {
+                            error!("[channel] queue overflowed");
+                            self.inner.is_sender_closed.swap(true, Ordering::AcqRel);
+                            self.inner.wake_receiver.wake();
+                        }
+                        self.inner.wake_sender.register(context.waker());
+                        Poll::Pending
+                    }
+                }
+            }
+            None => panic!("[channel] Value cannot be None"),
+        }
+    }
+}
+
+impl<'a, T> Unpin for SendFuture<'a, T> {}
+
+/// Receiver
 pub struct Receiver<T>(Arc<Inner<T>>);
 
 impl<T: core::fmt::Debug> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
-        let result = poll_fn(|context| match self.0.queue.dequeue() {
-            Some(value) => {
-                self.0.wake_sender.wake();
-                Poll::Ready(Some(value))
-            }
-            None => {
-                self.0.wake_receiver.register(context.waker());
-                if self.0.is_sender_closed.load(Ordering::Acquire) {
-                    Poll::Ready(None)
-                } else {
-                    Poll::Pending
-                }
-            }
-        })
-        .await;
-        result
+        ReceiveFuture { inner: &self.0 }.await
+    }
+
+    pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        ReceiveFuture { inner: &self.0 }.poll_unpin(cx)
     }
 }
 
@@ -137,6 +168,36 @@ impl<T> core::fmt::Debug for Receiver<T> {
     }
 }
 
+pub struct ReceiveFuture<'a, T> {
+    inner: &'a Inner<T>,
+}
+
+impl<'a, T> Future for ReceiveFuture<'a, T>
+where
+    T: core::fmt::Debug,
+{
+    type Output = Option<T>;
+
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.queue.dequeue() {
+            Some(value) => {
+                self.inner.item_count.fetch_sub(1, Ordering::Relaxed);
+                self.inner.wake_sender.wake();
+                Poll::Ready(Some(value))
+            }
+            None => {
+                self.inner.wake_receiver.register(context.waker());
+                if self.inner.is_sender_closed.load(Ordering::Acquire) {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Pending
+                }
+            }
+        }
+    }
+}
+
+/// channel::error
 pub mod error {
     use core::fmt;
 

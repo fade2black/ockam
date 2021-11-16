@@ -109,7 +109,6 @@ impl<T: Send> Default for JoinHandle<T> {
 pub async fn yield_now() {
     #[allow(dead_code)]
     struct YieldNow {
-        counter: usize,
         yielded: bool,
     }
 
@@ -127,9 +126,5 @@ pub async fn yield_now() {
         }
     }
 
-    YieldNow {
-        counter: 0,
-        yielded: false,
-    }
-    .await
+    YieldNow { yielded: false }.await
 }

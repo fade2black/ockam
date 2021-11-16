@@ -15,14 +15,17 @@ default = ["std"]
 
 # Feature (enabled by default): "std" enables functionality expected to
 # be available on a standard platform.
-std     = ["alloc", "futures/std", "ockam_core/std"]
+std = ["alloc", "futures/std", "ockam_core/std"]
 
 # Feature: "alloc" enables support for heap allocation (implied by `feature = "std"`)
-alloc   = ["futures/alloc", "ockam_core/alloc"]
+alloc = ["futures/alloc", "ockam_core/alloc"]
 
 # Feature: "no_std" enables functionality required for platforms
 # without the standard library, requires nightly.
-no_std  = ["ockam_core/no_std"]
+no_std = ["ockam_core/no_std"]
+
+# Feature: "debug_alloc" enables memory allocation stats
+debug_alloc = ["cortex-m", "cortex-m-rt", "linked_list_allocator"]
 
 [dependencies]
 crossbeam-queue = { version = "0.3.2", default_features = false, features = ["alloc"] }
@@ -31,3 +34,8 @@ heapless = { version = "0.7", features = [ "mpmc_large" ] }
 ockam_core = { path = "../ockam_core", version = "^0.40.0", default_features = false }
 pin-project-lite = "0.2"
 pin-utils = "0.1.0"
+
+# used by debug_alloc
+cortex-m = { version = "0.7.3", optional = true }
+cortex-m-rt = { version = "0.6.14", optional = true }
+linked_list_allocator = { version = "0.9.1", default_features = false, features = ["const_mut_refs"], optional = true }

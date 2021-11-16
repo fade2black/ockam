@@ -26,6 +26,9 @@ extern crate core;
 #[macro_use]
 extern crate alloc;
 
+#[cfg(feature = "debug_alloc")]
+pub mod debug_alloc;
+
 pub mod channel;
 pub mod executor;
 pub mod oneshot;
