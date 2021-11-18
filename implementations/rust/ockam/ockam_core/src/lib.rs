@@ -61,27 +61,53 @@ pub use worker::*;
 
 #[cfg(feature = "std")]
 pub use std::println;
+
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 /// println macro for no_std
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => {{
-        // TODO replace with cortex-m-log or defmt
-        #[cfg(target_arch="arm")]
-        cortex_m_semihosting::hprintln!($($arg)*).unwrap();
-        // dummy fallback definition
-        #[cfg(not(target_arch="arm"))]
-        {
-            use ockam_core::compat::io::Write;
-            let mut buffer = [0 as u8; 1];
-            let mut cursor = ockam_core::compat::io::Cursor::new(&mut buffer[..]);
-            match write!(&mut cursor, $($arg)*) {
-                Ok(()) => (),
-                Err(_) => (),
+pub mod println_no_std {
+
+    #[cfg(all(target_arch = "arm", feature = "itm"))]
+    #[macro_export]
+    /// implementation for cortex-m itm
+    macro_rules! println {
+        ($($arg:tt)*) => {{
+            {
+                // give the itm buffer time to empty
+                cortex_m::asm::delay(96_000_000 / 32);
+
+                let itm = unsafe { &mut *cortex_m::peripheral::ITM::ptr() };
+                cortex_m::iprintln!(&mut itm.stim[0], $($arg)*);
             }
-        }
-    }};
+        }};
+    }
+
+    #[cfg(all(target_arch = "arm", feature = "semihosting"))]
+    #[macro_export]
+    /// implementation for cortex-m semihosting
+    macro_rules! println {
+        ($($arg:tt)*) => {{
+            cortex_m_semihosting::hprintln!($($arg)*).unwrap();
+        }};
+    }
+
+    #[cfg(not(target_arch = "arm"))]
+    #[macro_export]
+    /// place-holder implementation for unsupported configurations
+    macro_rules! println {
+        ($($arg:tt)*) => {{
+            {
+                use ockam_core::compat::io::Write;
+                let mut buffer = [0 as u8; 1];
+                let mut cursor = ockam_core::compat::io::Cursor::new(&mut buffer[..]);
+                match write!(&mut cursor, $($arg)*) {
+                    Ok(()) => (),
+                    Err(_) => (),
+                }
+            }
+        }};
+    }
 }
+
 
 /// Module for custom implementation of standard traits.
 pub mod traits {

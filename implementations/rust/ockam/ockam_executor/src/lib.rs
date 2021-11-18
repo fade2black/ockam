@@ -51,11 +51,15 @@ pub mod tokio {
     pub use crate::time;
 }
 
-// simple logging
-
+// println
 #[cfg(not(feature = "std"))]
 pub use ockam_core::println;
 
+// std logging
+#[macro_use]
+extern crate tracing;
+
+// simple logging
 #[cfg(not(feature = "std"))]
 pub mod logging_no_std {
     /// error!
@@ -83,14 +87,18 @@ pub mod logging_no_std {
     #[macro_export]
     macro_rules! debug {
         ($($arg:tt)*) => (
-            ockam_core::println!($($arg)*);
+            if true {
+                ockam_core::println!($($arg)*);
+            }
         )
     }
     /// trace!
     #[macro_export]
     macro_rules! trace {
         ($($arg:tt)*) => (
-            ockam_core::println!($($arg)*);
+            if false {
+                ockam_core::println!($($arg)*);
+            }
         )
     }
 }

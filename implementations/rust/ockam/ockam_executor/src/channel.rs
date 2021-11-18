@@ -12,8 +12,6 @@ use futures::FutureExt;
 
 use heapless::mpmc::MpMcQueue;
 
-use crate::error;
-
 const QUEUE_SIZE: usize = 16;
 
 pub type QueueN<T, const N: usize> = MpMcQueue<T, N>;

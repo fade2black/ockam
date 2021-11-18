@@ -25,7 +25,7 @@ alloc = ["futures/alloc", "ockam_core/alloc"]
 no_std = ["ockam_core/no_std"]
 
 # Feature: "debug_alloc" enables memory allocation stats
-debug_alloc = ["cortex-m", "cortex-m-rt", "linked_list_allocator"]
+debug_alloc = ["cortex-m-rt", "linked_list_allocator"]
 
 [dependencies]
 crossbeam-queue = { version = "0.3.2", default_features = false, features = ["alloc"] }
@@ -34,8 +34,12 @@ heapless = { version = "0.7", features = [ "mpmc_large" ] }
 ockam_core = { path = "../ockam_core", version = "^0.40.0", default_features = false }
 pin-project-lite = "0.2"
 pin-utils = "0.1.0"
+tracing = { version = "0.1", default-features = false }
 
 # used by debug_alloc
-cortex-m = { version = "0.7.3", optional = true }
+[target.'cfg(target_arch = "arm")'.dependencies]
+#cortex-m = { version = "0.7.3"}, optional = true }
 cortex-m-rt = { version = "0.6.14", optional = true }
+cortex-m = "0.7.3"
+cortex-m-semihosting = "0.3.7" # TODO replace cortex-m-semihosting with 'log'
 linked_list_allocator = { version = "0.9.1", default_features = false, features = ["const_mut_refs"], optional = true }

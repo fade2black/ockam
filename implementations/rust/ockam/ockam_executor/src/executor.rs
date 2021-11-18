@@ -14,8 +14,6 @@ use ockam_core::compat::vec::Vec;
 
 use pin_utils::pin_mut;
 
-use crate::{debug, warn};
-
 /// Returns current executor.
 /// WARNING: TODO this is not thread-safe
 pub fn current() -> &'static Executor<'static> {
