@@ -18,6 +18,9 @@ defprotocol Ockam.Message do
   @doc "Returns the payload of a message."
   @spec payload(t()) :: binary()
   def payload(message)
+
+  @spec metadata(t()) :: %{String.t() => binary()}
+  def metadata(message)
 end
 
 # implement Ockam.Message for any message that does not already have an implementation
@@ -41,4 +44,8 @@ defimpl Ockam.Message, for: Any do
 
   # for any other message, that does not implement Ockam.Message, assume the message is the payload.
   def payload(message), do: message
+
+  def metadata(%{metadata: metadata}), do: metadata
+
+  def metadata(_message), do: %{}
 end

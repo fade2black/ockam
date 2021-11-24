@@ -28,6 +28,7 @@ defmodule Ockam.Wire.Binary.V2 do
        version: :uint,
        onward_route: bare_spec(:route),
        return_route: bare_spec(:route),
+       metadata: {:map, :string, :data},
        payload: :data
      ]}
   end
@@ -44,6 +45,7 @@ defmodule Ockam.Wire.Binary.V2 do
   def encode(message) do
     onward_route = Message.onward_route(message)
     return_route = Message.return_route(message)
+    metadata = Message.metadata(message)
     payload = Message.payload(message)
 
     with {:ok, encoded_onward_route} <- Route.encode(onward_route),
@@ -54,6 +56,7 @@ defmodule Ockam.Wire.Binary.V2 do
                version: @version,
                onward_route: encoded_onward_route,
                return_route: encoded_return_route,
+               metadata: metadata,
                payload: payload
              },
              bare_spec(:message)
