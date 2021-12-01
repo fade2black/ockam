@@ -3,16 +3,13 @@ use core::future::Future;
 use core::mem::MaybeUninit;
 use core::pin::Pin;
 use core::sync::atomic::{self, AtomicBool, AtomicUsize, Ordering};
-use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use core::task::{Context, Poll, Waker};
 
 use crossbeam_queue::SegQueue;
 use ockam_core::compat::boxed::Box;
 use ockam_core::compat::collections::BTreeMap;
-use ockam_core::compat::sync::{Arc, Mutex, RwLock};
+use ockam_core::compat::sync::Arc;
 use ockam_core::compat::task::Wake;
-use ockam_core::compat::vec::Vec;
-
-use pin_utils::pin_mut;
 
 /// Returns current executor.
 /// WARNING: TODO this is not thread-safe
@@ -58,7 +55,7 @@ impl<'a> Executor<'a> {
     pub fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
         let mut node = Node {
             id: TaskId::new(),
-            name: "Node",
+            _name: "Node",
             future: UnsafeCell::new(future),
         };
         let node_waker = NodeWaker::new(node.id);
@@ -101,7 +98,7 @@ impl<'a> Executor<'a> {
     /// poll_task
     fn poll_task(&self, task_id: TaskId) {
         let tasks = unsafe {
-            let tasksp = self.tasks.get() as *mut BTreeMap<TaskId, Box<Task>>;
+            let tasksp = self.tasks.get();
             &mut (*tasksp)
         };
         let task = match tasks.get_mut(&task_id) {
@@ -117,7 +114,7 @@ impl<'a> Executor<'a> {
         };
 
         let waker_cache = unsafe {
-            let waker_cachep = self.waker_cache.get() as *mut BTreeMap<TaskId, Waker>;
+            let waker_cachep = self.waker_cache.get();
             &mut (*waker_cachep)
         };
         let waker = waker_cache
@@ -143,7 +140,7 @@ impl<'a> Executor<'a> {
         debug!("[executor] spawning task: {}", task.id.0);
         self.task_queue.push(task.id);
         let tasks = unsafe {
-            let tasksp = self.tasks.get() as *mut BTreeMap<TaskId, Box<Task>>;
+            let tasksp = self.tasks.get();
             &mut (*tasksp)
         };
         if tasks.insert(task.id, task).is_some() {
@@ -158,7 +155,7 @@ impl<'a> Executor<'a> {
         debug!("[executor] spawning task: {}@{}", name, task.id.0);
         self.task_queue.push(task.id);
         let tasks = unsafe {
-            let tasksp = self.tasks.get() as *mut BTreeMap<TaskId, Box<Task>>;
+            let tasksp = self.tasks.get();
             &mut (*tasksp)
         };
         if tasks.insert(task.id, task).is_some() {
@@ -192,7 +189,7 @@ where
     F: ?Sized,
 {
     id: TaskId,
-    name: &'static str,
+    _name: &'static str,
     future: UnsafeCell<F>,
     // TODO future: Pin<Box<F>>,
 }
@@ -211,9 +208,8 @@ where
     F: ?Sized + Future<Output = T>,
 {
     fn poll(&mut self, context: &mut Context) -> Poll<T> {
-        //self.future.as_mut().poll(context)
         let future = unsafe {
-            let futurep = self.future.get() as *mut F;
+            let futurep = self.future.get();
             &mut (*futurep)
         };
         unsafe { Pin::new_unchecked(future).poll(context) }
@@ -224,7 +220,7 @@ impl Task {
     fn allocate(future: impl Future + 'static) -> Box<Task> {
         Box::new(Node {
             id: TaskId::new(),
-            name: "Task",
+            _name: "Task",
             future: UnsafeCell::new(async {
                 // task terminating
                 future.await;
@@ -236,7 +232,7 @@ impl Task {
     fn allocate_with_name(name: &'static str, future: impl Future + 'static) -> Box<Task> {
         Box::new(Node {
             id: TaskId::new(),
-            name: name,
+            _name: name,
             future: UnsafeCell::new(async {
                 // task terminating
                 future.await;

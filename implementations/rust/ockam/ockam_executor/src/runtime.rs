@@ -3,8 +3,7 @@
 
 use core::future::Future;
 use core::pin::Pin;
-use core::task::{Context, Poll};
-use core::task::{RawWaker, RawWakerVTable, Waker};
+use core::task::{Context, Poll, Waker};
 use ockam_core::compat::io;
 use ockam_core::compat::sync::{Arc, Mutex};
 

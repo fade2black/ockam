@@ -1,30 +1,28 @@
-use core::cell::{RefCell, UnsafeCell};
 use core::future::Future;
 use core::pin::Pin;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use core::task::{Context, Poll};
 
-use ockam_core::compat::sync::Arc;
-
-use futures::future::poll_fn;
 use futures::task::AtomicWaker;
 use futures::FutureExt;
-
 use heapless::mpmc::MpMcQueue;
 
-const QUEUE_SIZE: usize = 16;
+use ockam_core::compat::sync::Arc;
+
+
+const QUEUE_LENGTH: usize = 16;
 
 pub type QueueN<T, const N: usize> = MpMcQueue<T, N>;
-pub type Queue<T> = QueueN<T, QUEUE_SIZE>;
+pub type Queue<T> = QueueN<T, QUEUE_LENGTH>;
 
-pub fn channel<T>(size: usize) -> (Sender<T>, Receiver<T>) {
+pub fn channel<T>(length: usize) -> (Sender<T>, Receiver<T>) {
     let queue = Queue::new();
-    channel_with_queue(size, queue)
+    channel_with_queue(length, queue)
 }
 
-fn channel_with_queue<T>(size: usize, queue: Queue<T>) -> (Sender<T>, Receiver<T>) {
+fn channel_with_queue<T>(length: usize, queue: Queue<T>) -> (Sender<T>, Receiver<T>) {
     let inner = Arc::new(Inner {
-        size: size,
+        _length: length,
         queue: queue,
         item_count: AtomicUsize::new(0),
         wake_sender: AtomicWaker::new(),
@@ -38,8 +36,8 @@ fn channel_with_queue<T>(size: usize, queue: Queue<T>) -> (Sender<T>, Receiver<T
 
 /// Inner
 struct Inner<T> {
-    /// Logical size of the underlying queue
-    size: usize,
+    /// Logical length of the underlying queue
+    _length: usize,
 
     /// Number of items in queue
     item_count: AtomicUsize,
@@ -60,6 +58,12 @@ struct Inner<T> {
 
     /// Set to true when the send half of the channel is closed.
     is_sender_closed: AtomicBool,
+}
+
+impl<T> Inner<T> {
+    fn _len(&self) -> usize {
+        self._length
+    }
 }
 
 /// Sender
